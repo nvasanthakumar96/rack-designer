@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <title>Rack Designer</title>
+  <meta name="description" content="Design a bolted steel rack with drop-in boards. 3D view, working drawing, cut list and checks for fabricators and carpenters." />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f5f7" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1c1c1e" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Rack Designer" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app" data-view="3d">
+    <aside id="panel" aria-label="Parameters">
+      <button class="grab" id="grab" type="button" aria-label="Resize parameters panel" aria-expanded="false"><i></i></button>
+      <div class="panel-head">
+        <div class="head-row">
+          <input id="name" class="name" type="text" maxlength="60" spellcheck="false" autocomplete="off" aria-label="Project name" enterkeyhint="done" />
+          <div class="seg small" id="unit" role="group" aria-label="Units" style="--n:3">
+            <span class="thumb"></span>
+            <button data-v="mm">mm</button>
+            <button data-v="cm">cm</button>
+            <button data-v="in">in</button>
+          </div>
+        </div>
+        <p class="summary" id="summary"></p>
+      </div>
+      <div class="panel-body" id="panel-body">
+        <form id="fields" autocomplete="off" novalidate></form>
+      </div>
+    </aside>
+
+    <main id="stage">
+      <header class="bar">
+        <button class="icon" id="collapse" type="button" data-act="collapse" aria-label="Hide settings panel" aria-controls="panel" aria-expanded="true">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M9.5 5v14"/></svg>
+        </button>
+        <div class="seg" id="view" role="tablist" aria-label="View" style="--n:4">
+          <span class="thumb"></span>
+          <button role="tab" data-v="3d">3D</button>
+          <button role="tab" data-v="2d">Drawing</button>
+          <button role="tab" data-v="parts">Parts</button>
+          <button role="tab" data-v="checks">Checks<b class="badge" id="badge" hidden></b></button>
+        </div>
+        <div class="bar-right">
+          <button class="icon" id="undo" type="button" aria-label="Undo" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10a5.5 5.5 0 0 1 0 11h-3"/></svg>
+          </button>
+          <button class="icon" id="redo" type="button" aria-label="Redo" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5m5 5H10a5.5 5.5 0 0 0 0 11h3"/></svg>
+          </button>
+          <button class="icon" id="menu-btn" type="button" aria-label="More" aria-haspopup="menu" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <section class="pane" id="pane-3d" role="tabpanel">
+        <div id="three"></div>
+        <p class="tip" id="tip">Tap any part of the rack to change it</p>
+        <div class="inspector" id="inspector" role="dialog" aria-labelledby="insp-title" hidden>
+          <div class="insp-head">
+            <div><div class="insp-title"><h3 id="insp-title"></h3><span class="marks" id="insp-marks"></span></div><p id="insp-facts"></p></div>
+            <button class="icon plain" id="insp-close" type="button" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+          </div>
+          <p class="insp-what" id="insp-what"></p>
+          <form class="card" id="insp-fields" autocomplete="off" novalidate></form>
+        </div>
+        <div class="hud">
+          <div class="seg small" id="cam" role="group" aria-label="Camera" style="--n:4">
+            <span class="thumb"></span>
+            <button data-v="iso">Iso</button>
+            <button data-v="front">Front</button>
+            <button data-v="side">End</button>
+            <button data-v="top">Top</button>
+          </div>
+          <button class="chip" id="explode" type="button" aria-pressed="false">Lift boards</button>
+          <button class="chip" id="hide-boards" type="button" aria-pressed="false">Frame only</button>
+        </div>
+      </section>
+      <section class="pane scroll" id="pane-2d" role="tabpanel">
+        <div class="pane-inner wide">
+          <p class="hint">Tap an underlined dimension to change it.</p>
+          <div id="sheet"></div>
+        </div>
+      </section>
+      <section class="pane scroll" id="pane-parts" role="tabpanel"><div class="pane-inner" id="parts"></div></section>
+      <section class="pane scroll" id="pane-checks" role="tabpanel"><div class="pane-inner narrow" id="checks"></div></section>
+    </main>
+  </div>
+
+  <div class="menu" id="menu" role="menu" hidden>
+    <div class="menu-label">Project</div>
+    <button role="menuitem" data-act="new">New project</button>
+    <label role="menuitem" class="menu-file">Open project file…<input type="file" id="open-json" accept="application/json,.json" hidden /></label>
+    <button role="menuitem" data-act="save">Save project file</button>
+    <hr />
+    <div class="menu-label">My projects in this browser</div>
+    <div id="projects"></div>
+    <button role="menuitem" data-act="delete" class="danger">Delete project</button>
+    <hr />
+    <div class="menu-label">Start from a template</div>
+    <div id="presets"></div>
+    <hr />
+    <button role="menuitem" data-act="share">Copy share link</button>
+    <button role="menuitem" data-act="print">Print drawing and parts</button>
+    <hr />
+    <div class="menu-label">Export</div>
+    <button role="menuitem" data-act="svg">Drawing (SVG)</button>
+    <button role="menuitem" data-act="png">3D view (PNG)</button>
+    <button role="menuitem" data-act="csv">Parts list (CSV)</button>
+    <hr />
+    <button role="menuitem" data-act="install" id="install" hidden>Install app</button>
+    <button role="menuitem" data-act="reset" class="danger">Reset to defaults</button>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

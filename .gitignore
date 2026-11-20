@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+
+# tool output, never commit
+.playwright-mcp/
+playwright-report/
+test-results/
+coverage/
+storybook-static/
+.turbo/
