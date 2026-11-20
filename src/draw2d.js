@@ -164,7 +164,7 @@ export function drawSheet(model, unit) {
   {
     const g = p.edgeGap, T = p.boardT, pk = p.packer;
     const zMax = tp + ar + Math.max(18, T * 0.9);
-    const yMin = -Math.max(8, model.stations.length > 2 ? p.crossA - p.crossT - tr : 0) - 6, yMax = ar + 9;
+    const yMin = -Math.max(8, model.stations.length > 2 && p.crossType === 'angle' ? p.crossA - p.crossT - tr : 0) - 6, yMax = ar + 9;
     const k = Math.min((colW * 0.42) / (zMax + 8), ((rowH - 4 * u) * 0.8) / (yMax - yMin));
     const ox = sx0 + colW * 0.04, oy = py0 + (rowH - 4 * u) * 0.5 + ((yMax + yMin) / 2) * k;
     const X = (z) => ox + z * k, Y = (y) => oy - y * k;
@@ -176,7 +176,7 @@ export function drawSheet(model, unit) {
     box(tp, 0, tp + tr, ar, FILL.rail);
     box(tp + tr, 0, tp + ar, tr, FILL.rail);
     if (model.stations.length > 2) {
-      box(tp + ar + 2, tr - (p.crossA - p.crossT), tp + ar + 2 + Math.max(3, zMax - tp - ar - 2), tr, FILL.cross, 'fill-opacity="0.55"');
+      if (p.crossType === 'angle') box(tp + ar + 2, tr - (p.crossA - p.crossT), tp + ar + 2 + Math.max(3, zMax - tp - ar - 2), tr, FILL.cross, 'fill-opacity="0.55"');
       box(tp + tr + 1, tr, zMax, tr + p.crossT, FILL.cross);
     }
     if (p.boards) {
@@ -207,7 +207,7 @@ export function drawSheet(model, unit) {
     lab(tp + ar - 2, tr / 2, row++, `Rail ${ar} × ${ar} × ${tr} angle`);
     lab(tp + tr + inH / 2, by, row++, `M${B.d} ${p.head === 'button' ? 'button head inside, nut outside' : 'hex head outside, nut inside'}`);
     lab(tp / 2, yMin + 6, row++, `Post ${p.postA} × ${p.postA} × ${tp} angle`);
-    if (model.stations.length > 2) lab(zMax - 4, tr + p.crossT / 2, row++, `Cross bearer ${p.crossA} × ${p.crossA} × ${p.crossT}, drops in`);
+    if (model.stations.length > 2) lab(zMax - 4, tr + p.crossT / 2, row++, p.crossType === 'flat' ? `Cross bearer ${p.crossA} × ${p.crossT} flat bar, drops in` : `Cross bearer ${p.crossA} × ${p.crossA} × ${p.crossT}, drops in`);
     title(sx0 + colW / 2, py0 + rowH + 0.5 * u, 'DETAIL A  ·  BOARD SEAT', 'section through a long rail');
   }
 

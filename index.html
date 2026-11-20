@@ -20,7 +20,7 @@
 <body>
   <div id="app" data-view="3d">
     <aside id="panel" aria-label="Parameters">
-      <button class="grab" id="grab" type="button" aria-label="Resize parameters panel" aria-expanded="false"><i></i></button>
+      <button class="icon plain" id="drawer-close" type="button" aria-label="Close settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
       <div class="panel-head">
         <div class="head-row">
           <input id="name" class="name" type="text" maxlength="60" spellcheck="false" autocomplete="off" aria-label="Project name" enterkeyhint="done" />
@@ -84,17 +84,28 @@
           </div>
           <button class="chip" id="explode" type="button" aria-pressed="false">Lift boards</button>
           <button class="chip" id="hide-boards" type="button" aria-pressed="false">Frame only</button>
+          <button class="chip" id="bg-btn" type="button" aria-haspopup="dialog" aria-expanded="false"><span class="bg-dot" id="bg-dot"></span>Background</button>
+          <div class="pop" id="bg-pop" role="dialog" aria-label="Background" hidden>
+            <div class="pop-label">Background</div>
+            <div class="swatches" id="bg-swatches" role="group" aria-label="Background colour"></div>
+            <label class="pop-row">Custom colour<input type="color" id="bg-custom" value="#f5f5f7" /></label>
+            <label class="pop-row">Floor grid<input class="switch" type="checkbox" role="switch" id="bg-grid" checked /></label>
+          </div>
         </div>
       </section>
-      <section class="pane scroll" id="pane-2d" role="tabpanel">
-        <div class="pane-inner wide">
-          <p class="hint">Tap an underlined dimension to change it.</p>
-          <div id="sheet"></div>
+      <section class="pane" id="pane-2d" role="tabpanel">
+        <div id="sheet"></div>
+        <p class="tip" id="tip-2d">Pinch or scroll to zoom. Tap an underlined size to change it.</p>
+        <div class="hud">
+          <button class="chip round" type="button" data-act="zoom-out" aria-label="Zoom out">−</button>
+          <button class="chip round" type="button" data-act="zoom-in" aria-label="Zoom in">+</button>
+          <button class="chip" type="button" data-act="zoom-fit">Fit</button>
         </div>
       </section>
       <section class="pane scroll" id="pane-parts" role="tabpanel"><div class="pane-inner" id="parts"></div></section>
       <section class="pane scroll" id="pane-checks" role="tabpanel"><div class="pane-inner narrow" id="checks"></div></section>
     </main>
+    <div id="scrim" hidden></div>
   </div>
 
   <div class="menu" id="menu" role="menu" hidden>

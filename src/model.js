@@ -49,7 +49,7 @@ export const DEFAULTS = {
   postA: 40, postT: 3, slotPosts: true,
   railA: 30, railT: 3, slotRails: true,
   bays: 2, flatW: 40, flatT: 8, slotCentre: true,
-  crossPerBay: 1, crossA: 30, crossT: 2, slotCross: true,
+  crossPerBay: 1, crossType: 'angle', crossA: 30, crossT: 2, slotCross: true,
   bolt: 6, head: 'button', pitch: 19,
   boards: true, boardMat: 'hdmr', boardT: 25, packer: 2, edgeGap: 4, sheetL: 2440, sheetW: 1220,
   footType: 'leveller', footH: 30,
@@ -81,7 +81,7 @@ export const LIMITS = {
 const INTS = ['levels', 'bays', 'crossPerBay'];
 const BOOLS = ['snap', 'slotPosts', 'slotRails', 'slotCentre', 'slotCross', 'boards'];
 const ENUMS = {
-  spacing: ['even', 'custom'], head: ['button', 'hex'], footType: ['leveller', 'cap', 'none'],
+  spacing: ['even', 'custom'], crossType: ['angle', 'flat'], head: ['button', 'hex'], footType: ['leveller', 'cap', 'none'],
   brace: ['knee', 'x', 'single', 'none'], boardMat: Object.keys(BOARD_MATS),
   steelColor: Object.keys(STEEL_COLORS), boardColor: Object.keys(BOARD_COLORS),
 };
@@ -324,9 +324,16 @@ export function buildModel(input) {
     for (const st of interior) {
       // Bearer: lies on the two seats under the board. No bolts; the board and the rail uprights trap it.
       const z0 = tp + tr + 1, len = D - 2 * z0, back = seatW + 1;
+      const x0 = st.c - ac / 2;
+      if (p.crossType === 'flat') {
+        // Flat bar: nothing to notch and it packs flat, but it adds almost no stiffness.
+        const part = steel('cross', 'Cross bearer', 'flat', { w: ac, t: tc }, len, 'z', z0, false);
+        part.notes.push('Drops onto the seats, no bolts');
+        plate(part, { x: x0, y: yl + tr, z: z0, w: ac, h: tc, d: len }, 'y', ac / 2, pitch / 2);
+        continue;
+      }
       const part = steel('cross', 'Cross bearer', 'angle', { a: ac, t: tc }, len, 'z', z0, p.slotCross);
       part.notes.push(`Cut the down flange ${back.toFixed(0)} mm back at both ends. Drops onto the seats, no bolts`);
-      const x0 = st.c - ac / 2;
       plate(part, { x: x0, y: yl + tr, z: z0, w: ac, h: tc, d: len }, 'y', (ac + tc) / 2, pitch / 2);
       plate(part, { x: x0, y: yl + tr - (ac - tc), z: z0 + back, w: tc, h: ac - tc, d: len - 2 * back }, 'x', (ac - tc) / 2, pitch / 2 - back);
     }
@@ -435,7 +442,7 @@ export function buildModel(input) {
   const tiers = [];
   for (let i = 0; i < ys.length - 1; i++) {
     const surface = ys[i] - Math.max(0, flush);
-    tiers.push({ from: i, clear: ys[i + 1] - ar - (interior.length ? Math.max(0, ac - tc - tr) : 0) - surface, railClear: ys[i + 1] - ar - surface });
+    tiers.push({ from: i, clear: ys[i + 1] - ar - (interior.length && p.crossType === 'angle' ? Math.max(0, ac - tc - tr) : 0) - surface, railClear: ys[i + 1] - ar - surface });
   }
   const bayPitch = L / p.bays, stationPitch = L / nSt;
   const mat = BOARD_MATS[p.boardMat];
@@ -478,8 +485,13 @@ export function buildModel(input) {
     if (interior.length && p.packer < tc - 0.05) warn('Cross bearers stand above the seat strip', `Bearers are ${mm(tc)} thick and lie on the seats, so the seat strip must be at least ${mm(tc)} for the board to rest evenly.`,
       { label: `Set seat strip to ${mm(tc)}`, patch: { packer: tc } });
     const maxSpan = 32 * p.boardT;
-    if (stationPitch > maxSpan) warn(`Board spans ${mm(stationPitch)} between supports`, `A ${mm(p.boardT)} board should be carried about every ${mm(maxSpan)} or closer.`,
-      p.crossPerBay < LIMITS.crossPerBay[1] ? { label: 'Add a cross support per bay', patch: { crossPerBay: p.crossPerBay + 1 } } : undefined);
+    // The board rests on the rails all round, so it spans the depth unless stiff (angle) bearers are closer than that.
+    const stiff = interior.length && p.crossType === 'angle';
+    const span = Math.min(boardD, stiff ? stationPitch : boardL);
+    if (span > maxSpan) warn(`Board spans ${mm(span)} unsupported`, `A ${mm(p.boardT)} board should be carried about every ${mm(maxSpan)} or closer.${p.crossType === 'flat' && interior.length ? ' Flat-bar bearers do not count: they are too thin to carry it.' : ''}`,
+      p.crossType === 'flat' ? { label: 'Use L-angle bearers', patch: { crossType: 'angle', crossPerBay: Math.max(1, p.crossPerBay) } }
+        : p.crossPerBay < LIMITS.crossPerBay[1] ? { label: 'Add a cross bearer per bay', patch: { crossPerBay: p.crossPerBay + 1 } } : undefined);
+    else if (p.crossType === 'flat' && interior.length) note('Flat-bar bearers add little stiffness', `Lying flat, a ${ac} × ${tc} bar is far more flexible than the board, so the board carries the load across the ${mm(boardD)} depth by itself. That is fine here. Use L-angle bearers for heavy loads or thin boards.`);
     if (boardD > p.sheetW) warn('Board is deeper than the sheet', `Boards are ${mm(boardD)} deep but the sheet is ${mm(p.sheetW)} wide.`);
     const longest = Math.max(...boards.map((b) => b.w));
     if (longest > p.sheetL + 0.5) warn('Board is longer than the sheet', `A ${mm(longest)} piece does not fit a ${mm(p.sheetL)} sheet and there is no cross support to join it over.`,

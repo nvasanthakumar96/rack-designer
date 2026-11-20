@@ -49,7 +49,8 @@ builds and publishes `dist/`.
 | `src/view3d.js` | three.js scene with real slots, instanced bolts and liftable boards. |
 | `src/draw2d.js` | Front, end, plan and board-seat detail as SVG, with click-to-edit dimensions. |
 | `src/main.js` | Parameter form, views, menu, undo, share link, exports. |
-| `src/sheet.js` | Bottom sheet for phones. |
+| `src/drawer.js` | Settings drawer for phones (slides in from the left). |
+| `src/panzoom.js` | Pinch, pan and zoom for the drawing. |
 | `src/units.js` | Unit formatting and parsing. Geometry is always millimetres. |
 | `vite.config.js` | Build config and the generated service worker. |
 | `scripts/make-icons.mjs` | Regenerates the app icons (`npm run icons`). |

@@ -84,14 +84,29 @@ export function createView(container, { onPick } = {}) {
   let grid;
   const setGrid = () => {
     if (grid) { scene.remove(grid); grid.geometry.dispose(); grid.material.dispose(); }
-    grid = dark() ? new THREE.GridHelper(30, 60, 0x4a4a4f, 0x343437) : new THREE.GridHelper(30, 60, 0xc5c8ce, 0xdfe1e5);
+    grid = darkScene() ? new THREE.GridHelper(30, 60, 0x4a4a4f, 0x343437) : new THREE.GridHelper(30, 60, 0xc5c8ce, 0xdfe1e5);
     grid.position.y = -0.0006;
     grid.material.transparent = true;
     grid.material.opacity = 0.7;
+    grid.visible = gridOn;
     scene.add(grid);
-    floor.material.opacity = dark() ? 0.45 : 0.2;
+    floor.material.opacity = darkScene() ? 0.45 : 0.2;
     dirty = true;
   };
+  // Background colour of the 3D view. null follows the light or dark theme.
+  let bgHex = null, gridOn = true;
+  const darkScene = () => {
+    if (!bgHex) return dark();
+    const c = new THREE.Color(bgHex);
+    return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b < 0.18;   // linear luminance
+  };
+  function setBackground(hex, showGrid = true) {
+    bgHex = hex || null;
+    gridOn = showGrid;
+    container.style.background = bgHex || '';
+    container.dataset.dark = darkScene();
+    setGrid();
+  }
   scene.add(floor);
 
   const mats = {
@@ -329,11 +344,11 @@ export function createView(container, { onPick } = {}) {
     const c = document.createElement('canvas');
     c.width = src.width; c.height = src.height;
     const ctx = c.getContext('2d');
-    ctx.fillStyle = dark() ? '#1c1c1e' : '#f5f5f7';
+    ctx.fillStyle = bgHex || (dark() ? '#1c1c1e' : '#f5f5f7');
     ctx.fillRect(0, 0, c.width, c.height);
     ctx.drawImage(src, 0, 0);
     return c.toDataURL('image/png');
   }
 
-  return { update, setView, setExplode, setSelected, snapshot, resize };
+  return { update, setView, setExplode, setSelected, setBackground, snapshot, resize };
 }

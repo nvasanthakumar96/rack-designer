@@ -3,7 +3,8 @@ import { billOfMaterials, toCSV } from './bom.js';
 import { fmt, toField, parseLen } from './units.js';
 import { drawSheet } from './draw2d.js';
 import { createView } from './view3d.js';
-import { createSheet } from './sheet.js';
+import { createDrawer } from './drawer.js';
+import { createPanZoom } from './panzoom.js';
 
 const STORE = 'rack-designer-v2';
 const $ = (s, root = document) => root.querySelector(s);
@@ -27,6 +28,8 @@ try { projects = JSON.parse(localStorage.getItem(PROJECTS)) || {}; } catch { /* 
 const newId = () => `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 let currentId = !shared && projects[saved.current] ? saved.current : newId();
 let collapsed = !!saved.collapsed;
+// How the 3D view looks. A view setting, not part of the project.
+let scene = { bg: /^#[0-9a-f]{6}$/i.test(saved.scene?.bg) ? saved.scene.bg : null, grid: saved.scene?.grid !== false };
 let params = sanitize({ ...DEFAULTS, ...(shared || projects[currentId]?.params || saved.params) });
 let unit = ['mm', 'cm', 'in'].includes(saved.unit) ? saved.unit : 'cm';
 let view = shared ? '3d' : ['3d', '2d', 'parts', 'checks'].includes(saved.view) ? saved.view : '3d';
@@ -63,10 +66,11 @@ const GROUPS = [
     { key: 'bays', label: 'Bays', type: 'step', hint: 'One flat bar front and back between bays' },
     { keys: ['flatW', 'flatT'], label: 'Section', type: 'sec', when: (p) => p.bays > 1 },
     { key: 'slotCentre', label: 'Slotted', type: 'bool', when: (p) => p.bays > 1 },
-    { type: 'sub', label: 'Cross bearers', note: 'L-angle, drop onto the seats', part: 'cross' },
+    { type: 'sub', label: 'Cross bearers', note: 'drop onto the seats', part: 'cross' },
     { key: 'crossPerBay', label: 'Extra per bay', type: 'step' },
+    { key: 'crossType', label: 'Shape', type: 'seg', options: [['angle', 'L-angle'], ['flat', 'Flat bar']], when: (p) => p.bays * (p.crossPerBay + 1) > 1 },
     { keys: ['crossA', 'crossT'], label: 'Section', type: 'sec', when: (p) => p.bays * (p.crossPerBay + 1) > 1 },
-    { key: 'slotCross', label: 'Slotted', type: 'bool', when: (p) => p.bays * (p.crossPerBay + 1) > 1 },
+    { key: 'slotCross', label: 'Slotted', type: 'bool', when: (p) => p.crossType === 'angle' && p.bays * (p.crossPerBay + 1) > 1 },
   ] },
   { id: 'fix', title: 'Bolts and slots', fields: [
     { key: 'bolt', label: 'Bolt size', type: 'seg', options: [[6, 'M6'], [8, 'M8'], [10, 'M10']] },
@@ -270,7 +274,7 @@ function persist() {
   projects[currentId] = { id: currentId, name: params.name, params, updated: changed ? Date.now() : before.updated };
   try {
     localStorage.setItem(PROJECTS, JSON.stringify(projects));
-    localStorage.setItem(STORE, JSON.stringify({ current: currentId, unit, view, open: [...openGroups], collapsed }));
+    localStorage.setItem(STORE, JSON.stringify({ current: currentId, unit, view, open: [...openGroups], collapsed, scene }));
   } catch { /* storage blocked */ }
 }
 
@@ -331,7 +335,7 @@ const PARTS = {
   centre: { title: 'Centre supports', what: 'Flat bars in the middle of the long sides. They stop long rails sagging and join the rail halves. More bays means more of them.',
             keys: ['bays', 'flatW', 'slotCentre'] },
   cross: { title: 'Cross bearers', what: 'Bars that lie under the board from front to back and stiffen it. They drop into place, no bolts.',
-           keys: ['crossPerBay', 'crossA', 'slotCross'] },
+           keys: ['crossPerBay', 'crossType', 'crossA', 'slotCross'] },
   brace: { title: 'Braces', what: 'Diagonal bars on the back. They stop the rack swaying sideways.', keys: ['brace', 'braceW'] },
   board: { title: 'Boards', what: 'The shelves. Each one is a plain rectangle that drops into the rails. No screws.',
            keys: ['levels', 'floorClear', 'boardMat', 'boardT', 'packer', 'edgeGap', 'boardColor'] },
@@ -406,7 +410,7 @@ function render() {
 
 // Only the pane on screen is rebuilt; the others are rebuilt when they are opened.
 function renderPane() {
-  if (view === '2d') $('#sheet').innerHTML = drawSheet(model, unit);
+  if (view === '2d') { $('#sheet').innerHTML = drawSheet(model, unit); viewer.attach(); }
   else if (view === 'parts') renderParts();
   else if (view === 'checks') renderChecks();
 }
@@ -515,6 +519,7 @@ function editDimension(node) {
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
   input.addEventListener('blur', () => finish(true));
 }
+const viewer = createPanZoom($('#sheet'), { onInteract: () => $('#tip-2d').classList.add('gone') });
 $('#sheet').addEventListener('click', (e) => { const n = e.target.closest('.ed'); if (n) editDimension(n); });
 $('#sheet').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.classList?.contains('ed')) editDimension(e.target); });
 
@@ -523,8 +528,8 @@ const segClick = (id, fn) => $(`#${id}`).addEventListener('click', (e) => { cons
 segClick('view', (v) => {
   view = v;
   render();
-  sheet.refresh();
   if (v === '3d') three.resize(); else selectPart(null);
+  if (v === '2d') viewer.attach();          // the pane is visible now, so the drawing can be sized
   $(`#pane-${v}`).scrollTop = 0;
 });
 segClick('unit', (v) => { unit = v; render(); });
@@ -549,7 +554,7 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     e.shiftKey ? redo() : undo();
   }
-  if (e.key === 'Escape') { closeMenu(); selectPart(null); }
+  if (e.key === 'Escape') { closeMenu(); selectPart(null); if (!$('#bg-pop').hidden) $('#bg-btn').click(); }
 });
 
 const menu = $('#menu'), menuBtn = $('#menu-btn');
@@ -604,7 +609,10 @@ const ACTIONS = {
     if (next) loadProject(next.id, next.params, 'Project deleted');
     else loadProject(newId(), { name: 'Untitled rack' }, 'Project deleted');
   },
-  collapse: () => setCollapsed(!collapsed),
+  collapse: () => (drawer.narrow ? drawer.toggle() : setCollapsed(!collapsed)),
+  'zoom-in': () => viewer.zoomBy(1.5),
+  'zoom-out': () => viewer.zoomBy(1 / 1.5),
+  'zoom-fit': () => viewer.fit(),
   print: () => {
     // the print stylesheet shows the drawing and the parts list, so both must be current
     $('#sheet').innerHTML = drawSheet(model, unit);
@@ -651,13 +659,45 @@ $('#open-json').addEventListener('change', async (e) => {
 });
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvent = e; $('#install').hidden = false; });
 
-// ---------- phone sheet ----------
-const sheet = createSheet($('#panel'), $('#grab'), {
-  onSettle: (name, visible) => {
-    document.documentElement.style.setProperty('--sheet', `${visible}px`);
-    three.resize();
-  },
+// ---------- phone drawer ----------
+// On a phone the settings panel is a drawer from the left; the same button opens it.
+const drawer = createDrawer($('#panel'), $('#scrim'), {
+  onChange: (open) => { if (window.matchMedia('(max-width: 719px)').matches) $('#collapse').setAttribute('aria-expanded', String(open)); },
 });
+$('#drawer-close').addEventListener('click', () => drawer.set(false));
+
+// ---------- 3D background ----------
+const BACKGROUNDS = [
+  [null, 'Automatic'], ['#ffffff', 'White'], ['#e9eaee', 'Soft grey'], ['#f3eee6', 'Warm'],
+  ['#dfe7f0', 'Sky'], ['#2b2d31', 'Charcoal'], ['#0e0e10', 'Black'],
+];
+$('#bg-swatches').innerHTML = BACKGROUNDS.map(([hex, label]) =>
+  `<button type="button" data-bg="${hex || ''}" class="${hex ? '' : 'auto'}" style="--c:${hex || 'transparent'}" aria-label="${label}" title="${label}"></button>`).join('');
+function applyScene() {
+  three.setBackground(scene.bg, scene.grid);
+  for (const b of $$('#bg-swatches button')) b.setAttribute('aria-pressed', (b.dataset.bg || null) === (scene.bg ? scene.bg.toLowerCase() : null));
+  $('#bg-dot').style.background = scene.bg || '';
+  $('#bg-dot').classList.toggle('auto', !scene.bg);
+  $('#bg-grid').checked = scene.grid;
+  if (scene.bg) $('#bg-custom').value = scene.bg;
+  // controls floating over the scene follow how dark it is, not the system theme
+  $('#pane-3d').dataset.scene = scene.bg ? ($('#three').dataset.dark === 'true' ? 'dark' : 'light') : '';
+  persist();
+}
+const bgPop = $('#bg-pop'), bgBtn = $('#bg-btn');
+function toggleBg(open) {
+  if (open) { bgPop.hidden = false; requestAnimationFrame(() => bgPop.classList.add('open')); }
+  else { bgPop.classList.remove('open'); setTimeout(() => { if (!bgPop.classList.contains('open')) bgPop.hidden = true; }, 160); }
+  bgBtn.setAttribute('aria-expanded', String(open));
+}
+bgBtn.addEventListener('click', () => toggleBg(bgPop.hidden));
+document.addEventListener('pointerdown', (e) => { if (!bgPop.hidden && !bgPop.contains(e.target) && !bgBtn.contains(e.target)) toggleBg(false); });
+$('#bg-swatches').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (b) { scene = { ...scene, bg: b.dataset.bg || null }; applyScene(); }
+});
+$('#bg-custom').addEventListener('input', (e) => { scene = { ...scene, bg: e.target.value }; applyScene(); });
+$('#bg-grid').addEventListener('change', (e) => { scene = { ...scene, grid: e.target.checked }; applyScene(); });
 
 buildForm();
 $('#app').classList.toggle('collapsed', collapsed);
@@ -666,6 +706,8 @@ bindFields($('#insp-fields'));
 $('#insp-close').addEventListener('click', () => selectPart(null));
 try { if (localStorage.getItem(`${STORE}-tip`)) $('#tip').classList.add('gone'); } catch { /* storage blocked */ }
 render();
+applyScene();
+if (view === '2d') viewer.attach();
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
